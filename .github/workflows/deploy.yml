@@ -1,0 +1,50 @@
+name: Deploy
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests pytest responses
+      - run: pytest -q
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    # Concurrency guard: a fast follow-up release shouldn't race a still-running
+    # deploy. The newer run waits, then supersedes the queued one.
+    concurrency:
+      group: do-functions-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install serverless plugin
+        run: doctl serverless install
+
+      # No argument: connects to the account's only namespace. If you maintain
+      # multiple namespaces, pass the label explicitly:
+      #   doctl serverless connect <namespace-label>
+      - name: Connect to serverless namespace
+        run: doctl serverless connect
+
+      # GitHub disallows secret names starting with GITHUB_, so the function's
+      # PAT and webhook secret are stored under FUNCTION_* and re-exported here
+      # to the names project.yml interpolates.
+      - name: Deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.FUNCTION_GITHUB_TOKEN }}
+          GITHUB_WEBHOOK_SECRET: ${{ secrets.FUNCTION_WEBHOOK_SECRET }}
+        run: doctl serverless deploy .

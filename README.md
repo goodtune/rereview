@@ -79,6 +79,27 @@ Prerequisites: `doctl` installed and authenticated, serverless plugin installed
    - **Events:** select "Let me choose individual events" → check only
      **Pull requests**
 
+## Automated deployment
+
+`.github/workflows/deploy.yml` runs the test suite and deploys the function
+whenever a GitHub release is published. To enable it, configure these
+repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret                       | Purpose                                       |
+|------------------------------|-----------------------------------------------|
+| `DIGITALOCEAN_ACCESS_TOKEN`  | DO API token for `doctl` auth                 |
+| `FUNCTION_GITHUB_TOKEN`      | Fine-grained PAT injected as `GITHUB_TOKEN`   |
+| `FUNCTION_WEBHOOK_SECRET`    | Shared secret injected as `GITHUB_WEBHOOK_SECRET` |
+
+The `FUNCTION_*` prefix is required because GitHub disallows custom secrets
+named `GITHUB_*`; the workflow re-exports them under the names `project.yml`
+expects.
+
+The DigitalOcean account also needs a serverless namespace created up front
+(`doctl serverless namespaces create --label rereview --region <region>`).
+
+To ship a new version: `gh release create vX.Y.Z --generate-notes`.
+
 ## Environment variables
 
 | Name                    | Purpose                                  |
