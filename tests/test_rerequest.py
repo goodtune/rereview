@@ -46,6 +46,22 @@ def test_invalid_signature_returns_401():
     args = _event(_synchronize_payload(), sig="sha256=deadbeef")
     resp = rerequest.main(args)
     assert resp["statusCode"] == 401
+    body = json.loads(resp["body"])
+    assert body == {"error": "invalid signature"}
+
+
+def test_invalid_signature_with_debug_includes_diagnostic(monkeypatch):
+    monkeypatch.setenv("DEBUG", "1")
+    args = _event(_synchronize_payload(), sig="sha256=deadbeef")
+    resp = rerequest.main(args)
+    assert resp["statusCode"] == 401
+    body = json.loads(resp["body"])
+    assert body["error"] == "invalid signature"
+    debug = body["debug"]
+    assert debug["secret_len"] == len(SECRET)
+    assert debug["received_sig"] == "sha256=deadbeef"
+    assert debug["computed_sig"].startswith("sha256=")
+    assert debug["body_len"] > 0
 
 
 def test_missing_signature_returns_401():

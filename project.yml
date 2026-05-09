@@ -16,6 +16,9 @@ packages:
         environment:
           GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
           GITHUB_TOKEN: ${GITHUB_TOKEN}
+          # Set DEBUG=1 in the deploy environment to enable diagnostic fields
+          # in 401 responses. Empty string when unset == disabled.
+          DEBUG: ${DEBUG}
         annotations: {}
         limits:
           # Each GitHub call uses an 8s HTTP timeout (handler.HTTP_TIMEOUT) and

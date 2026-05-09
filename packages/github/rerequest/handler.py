@@ -50,6 +50,21 @@ def _verify_signature(secret: str, body: bytes, signature: str | None) -> bool:
     return hmac.compare_digest(f"sha256={digest}", signature)
 
 
+def _signature_debug(secret: str, body: bytes, received: str | None) -> dict:
+    # HMAC outputs aren't sensitive without the secret, so returning the
+    # computed digest is safe. secret_tail_repr surfaces trailing
+    # whitespace/newlines (the most common signature-mismatch cause) without
+    # leaking enough of the secret to reconstruct it.
+    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return {
+        "secret_len": len(secret),
+        "secret_tail_repr": repr(secret[-4:]) if secret else "''",
+        "body_len": len(body),
+        "received_sig": received or "",
+        "computed_sig": f"sha256={digest}",
+    }
+
+
 def _gh_session(token: str) -> requests.Session:
     s = requests.Session()
     s.headers.update({
@@ -104,8 +119,12 @@ def main(args: dict) -> dict:
     if not secret or not token:
         return _response(500, {"error": "missing GITHUB_WEBHOOK_SECRET or GITHUB_TOKEN"})
 
-    if not _verify_signature(secret, raw, headers.get("x-hub-signature-256")):
-        return _response(401, {"error": "invalid signature"})
+    received_sig = headers.get("x-hub-signature-256")
+    if not _verify_signature(secret, raw, received_sig):
+        body = {"error": "invalid signature"}
+        if os.environ.get("DEBUG") == "1":
+            body["debug"] = _signature_debug(secret, raw, received_sig)
+        return _response(401, body)
 
     if headers.get("x-github-event") != "pull_request":
         return _response(200, {"ignored": "event"})
