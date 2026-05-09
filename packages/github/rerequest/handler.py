@@ -121,9 +121,17 @@ def main(args: dict) -> dict:
 
     received_sig = headers.get("x-hub-signature-256")
     if not _verify_signature(secret, raw, received_sig):
+        debug = _signature_debug(secret, raw, received_sig)
+        # Also surface DO's request envelope so we can tell when the runtime
+        # delivers a parsed/mangled body instead of the raw bytes GitHub
+        # signed (the canonical reason HMAC fails for a correctly-set secret).
+        debug["args_top_keys"] = sorted(args.keys())
+        debug["http_keys"] = sorted(http.keys())
+        debug["isBase64Encoded"] = http.get("isBase64Encoded")
+        print(f"rerequest: signature failure: {debug}", file=sys.stderr)
         body = {"error": "invalid signature"}
         if os.environ.get("DEBUG") == "1":
-            body["debug"] = _signature_debug(secret, raw, received_sig)
+            body["debug"] = debug
         return _response(401, body)
 
     if headers.get("x-github-event") != "pull_request":
