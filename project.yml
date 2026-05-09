@@ -9,7 +9,7 @@ packages:
       - name: rerequest
         binary: false
         main: ""
-        runtime: "python:default"
+        runtime: "python:3.11"
         web: true
         webSecure: false
         parameters: {}
