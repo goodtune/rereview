@@ -1,0 +1,26 @@
+targetNamespace: ""
+parameters: {}
+packages:
+  - name: github
+    environment: {}
+    parameters: {}
+    annotations: {}
+    actions:
+      - name: rerequest
+        binary: false
+        main: ""
+        runtime: "python:3.11"
+        web: true
+        webSecure: false
+        parameters: {}
+        environment:
+          GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+          GITHUB_TOKEN: ${GITHUB_TOKEN}
+        annotations: {}
+        limits:
+          # Each GitHub call uses an 8s HTTP timeout (handler.HTTP_TIMEOUT) and
+          # the handler makes at most three sequential calls (24s worst case),
+          # leaving comfortable margin under this 60s action timeout.
+          timeout: 60000
+          memory: 256
+          logs: 10
