@@ -1,0 +1,10 @@
+packages:
+  - name: github
+    actions:
+      - name: rerequest
+        runtime: python:3.11
+        web: true
+        main: __main__.py
+        environment:
+          GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+          GITHUB_TOKEN: ${GITHUB_TOKEN}
