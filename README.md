@@ -13,7 +13,7 @@ Serverless function to request another code review.
    - `export GITHUB_WEBHOOK_SECRET=...`
    - `export GITHUB_TOKEN=...`
 4. Deploy:
-   - `doctl serverless deploy /home/runner/work/rereview/rereview`
+   - `doctl serverless deploy .`
 5. Configure a GitHub webhook:
    - Event: Pull requests
    - Content type: `application/json`
