@@ -1,0 +1,23 @@
+targetNamespace: ""
+parameters: {}
+packages:
+  - name: github
+    environment: {}
+    parameters: {}
+    annotations: {}
+    actions:
+      - name: rerequest
+        binary: false
+        main: ""
+        runtime: "python:default"
+        web: true
+        webSecure: false
+        parameters: {}
+        environment:
+          GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+          GITHUB_TOKEN: ${GITHUB_TOKEN}
+        annotations: {}
+        limits:
+          timeout: 30000
+          memory: 256
+          logs: 10
