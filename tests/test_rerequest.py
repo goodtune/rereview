@@ -1,8 +1,8 @@
+import base64
 import hashlib
 import hmac
 import json
 
-import pytest
 import responses
 
 import handler as rerequest
@@ -55,8 +55,7 @@ def test_missing_signature_returns_401():
     assert resp["statusCode"] == 401
 
 
-def test_valid_signature_passes(monkeypatch):
-    # The handler still requires a github call; stub them to keep this focused.
+def test_valid_signature_passes():
     args = _event({"action": "ignored", "repository": {"full_name": "o/r"},
                    "pull_request": {"number": 1, "user": {"login": "a"}}})
     resp = rerequest.main(args)
@@ -96,6 +95,36 @@ def test_invalid_json_returns_400():
     assert resp["statusCode"] == 400
 
 
+def test_invalid_base64_body_returns_400():
+    args = {"http": {
+        "headers": {"X-GitHub-Event": "pull_request"},
+        "body": "!!! not base64 !!!",
+        "isBase64Encoded": True,
+    }}
+    resp = rerequest.main(args)
+    assert resp["statusCode"] == 400
+
+
+def test_base64_encoded_body_is_decoded():
+    payload = _synchronize_payload()
+    raw = json.dumps(payload).encode()
+    encoded = base64.b64encode(raw).decode()
+    args = {"http": {
+        "headers": {
+            "X-GitHub-Event": "pull_request",
+            "X-Hub-Signature-256": _sign(raw),
+        },
+        "body": encoded,
+        "isBase64Encoded": True,
+    }}
+    # No GitHub mocks set up — we just need the decode + signature check to
+    # succeed; the GitHub call will fail and surface as a 500.
+    resp = rerequest.main(args)
+    assert resp["statusCode"] in (200, 500)
+    # The signature would have failed (401) if base64 decoding broke.
+    assert resp["statusCode"] != 401
+
+
 # ---------- reviewer set logic ----------
 
 
@@ -117,13 +146,29 @@ def test_select_reviewers_uses_latest_state_for_dismissed():
     # Most recent for carol is DISMISSED -> excluded.
     # For frank, dismissal preceded a fresh COMMENTED -> included.
     reviews = [
-        {"user": {"login": "carol", "type": "User"}, "state": "APPROVED"},
-        {"user": {"login": "carol", "type": "User"}, "state": "DISMISSED"},
-        {"user": {"login": "frank", "type": "User"}, "state": "DISMISSED"},
-        {"user": {"login": "frank", "type": "User"}, "state": "COMMENTED"},
+        {"user": {"login": "carol", "type": "User"}, "state": "APPROVED",
+         "submitted_at": "2024-01-01T00:00:00Z"},
+        {"user": {"login": "carol", "type": "User"}, "state": "DISMISSED",
+         "submitted_at": "2024-01-02T00:00:00Z"},
+        {"user": {"login": "frank", "type": "User"}, "state": "DISMISSED",
+         "submitted_at": "2024-01-01T00:00:00Z"},
+        {"user": {"login": "frank", "type": "User"}, "state": "COMMENTED",
+         "submitted_at": "2024-01-02T00:00:00Z"},
     ]
     result = rerequest._select_reviewers(reviews, author_login="alice", pending=set())
     assert result == ["frank"]
+
+
+def test_select_reviewers_orders_by_submitted_at_not_iteration():
+    # API returns out-of-order: the DISMISSED is the actual latest, but it
+    # arrives first in the list. submitted_at must drive the decision.
+    reviews = [
+        {"user": {"login": "bob", "type": "User"}, "state": "DISMISSED",
+         "submitted_at": "2024-02-01T00:00:00Z"},
+        {"user": {"login": "bob", "type": "User"}, "state": "COMMENTED",
+         "submitted_at": "2024-01-01T00:00:00Z"},
+    ]
+    assert rerequest._select_reviewers(reviews, author_login="alice", pending=set()) == []
 
 
 def test_select_reviewers_empty():

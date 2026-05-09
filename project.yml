@@ -18,6 +18,9 @@ packages:
           GITHUB_TOKEN: ${GITHUB_TOKEN}
         annotations: {}
         limits:
-          timeout: 30000
+          # Each GitHub call uses an 8s HTTP timeout (handler.HTTP_TIMEOUT) and
+          # the handler makes at most three sequential calls (24s worst case),
+          # leaving comfortable margin under this 60s action timeout.
+          timeout: 60000
           memory: 256
           logs: 10

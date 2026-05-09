@@ -5,22 +5,34 @@ and by the test suite directly.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
 import os
+import sys
 
 import requests
 
 GITHUB_API = "https://api.github.com"
+HTTP_TIMEOUT = 8  # per-request; total wall time stays under the 30s function limit.
+
+
+class _BadBody(Exception):
+    pass
 
 
 def _raw_body(http: dict) -> bytes:
     body = http.get("body", "")
     if isinstance(body, bytes):
         return body
+    if not isinstance(body, str):
+        raise _BadBody("body is not a string or bytes")
     if http.get("isBase64Encoded"):
-        return base64.b64decode(body)
+        try:
+            return base64.b64decode(body, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise _BadBody(f"invalid base64 body: {exc}") from exc
     return body.encode("utf-8")
 
 
@@ -47,8 +59,12 @@ def _gh_session(token: str) -> requests.Session:
 
 
 def _select_reviewers(reviews: list[dict], author_login: str, pending: set[str]) -> list[str]:
+    # Sort by submitted_at so the last-write per login is the actual latest
+    # review, regardless of the order GitHub returned them in. Reviews with no
+    # submitted_at sort to the front (treated as oldest).
+    ordered = sorted(reviews, key=lambda r: r.get("submitted_at") or "")
     latest: dict[str, str] = {}
-    for review in reviews:
+    for review in ordered:
         user = (review.get("user") or {})
         login = user.get("login")
         if not login:
@@ -75,7 +91,10 @@ def _response(status: int, body: dict) -> dict:
 def main(args: dict) -> dict:
     http = args.get("http") or {}
     headers = _headers_lower(http)
-    raw = _raw_body(http)
+    try:
+        raw = _raw_body(http)
+    except _BadBody as exc:
+        return _response(400, {"error": str(exc)})
 
     secret = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
     token = os.environ.get("GITHUB_TOKEN", "")
@@ -105,10 +124,13 @@ def main(args: dict) -> dict:
 
     try:
         gh = _gh_session(token)
-        reviews = gh.get(f"{GITHUB_API}/repos/{repo}/pulls/{number}/reviews", timeout=10)
+        reviews = gh.get(
+            f"{GITHUB_API}/repos/{repo}/pulls/{number}/reviews", timeout=HTTP_TIMEOUT
+        )
         reviews.raise_for_status()
         pending_resp = gh.get(
-            f"{GITHUB_API}/repos/{repo}/pulls/{number}/requested_reviewers", timeout=10
+            f"{GITHUB_API}/repos/{repo}/pulls/{number}/requested_reviewers",
+            timeout=HTTP_TIMEOUT,
         )
         pending_resp.raise_for_status()
         pending = {u.get("login") for u in (pending_resp.json().get("users") or []) if u.get("login")}
@@ -120,9 +142,13 @@ def main(args: dict) -> dict:
         post = gh.post(
             f"{GITHUB_API}/repos/{repo}/pulls/{number}/requested_reviewers",
             json={"reviewers": reviewers},
-            timeout=10,
+            timeout=HTTP_TIMEOUT,
         )
         if post.status_code == 422:
+            print(
+                f"rerequest: github 422 for {repo}#{number} attempted={reviewers} body={post.text}",
+                file=sys.stderr,
+            )
             return _response(200, {"requested": [], "error": "422", "attempted": reviewers})
         post.raise_for_status()
         return _response(200, {"requested": reviewers})
