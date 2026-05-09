@@ -106,7 +106,11 @@ def test_invalid_base64_body_returns_400():
 
 
 def test_base64_encoded_body_is_decoded():
+    # Use action="opened" so the handler short-circuits before any GitHub
+    # call — this keeps the test hermetic (no network) while still exercising
+    # the base64 decode + signature verification path.
     payload = _synchronize_payload()
+    payload["action"] = "opened"
     raw = json.dumps(payload).encode()
     encoded = base64.b64encode(raw).decode()
     args = {"http": {
@@ -117,12 +121,9 @@ def test_base64_encoded_body_is_decoded():
         "body": encoded,
         "isBase64Encoded": True,
     }}
-    # No GitHub mocks set up — we just need the decode + signature check to
-    # succeed; the GitHub call will fail and surface as a 500.
     resp = rerequest.main(args)
-    assert resp["statusCode"] in (200, 500)
-    # The signature would have failed (401) if base64 decoding broke.
-    assert resp["statusCode"] != 401
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"]) == {"ignored": "action"}
 
 
 # ---------- reviewer set logic ----------

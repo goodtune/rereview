@@ -15,7 +15,10 @@ import sys
 import requests
 
 GITHUB_API = "https://api.github.com"
-HTTP_TIMEOUT = 8  # per-request; total wall time stays under the 30s function limit.
+# Per-request timeout for GitHub calls. The handler makes at most three
+# sequential calls (24s worst case) which sits comfortably under the 60s
+# action timeout configured in project.yml.
+HTTP_TIMEOUT = 8
 
 
 class _BadBody(Exception):
@@ -124,12 +127,18 @@ def main(args: dict) -> dict:
 
     try:
         gh = _gh_session(token)
+        # per_page=100 covers the vast majority of PRs in a single call. PRs
+        # with more than 100 reviews are rare; if it ever matters, add Link
+        # header pagination here.
         reviews = gh.get(
-            f"{GITHUB_API}/repos/{repo}/pulls/{number}/reviews", timeout=HTTP_TIMEOUT
+            f"{GITHUB_API}/repos/{repo}/pulls/{number}/reviews",
+            params={"per_page": 100},
+            timeout=HTTP_TIMEOUT,
         )
         reviews.raise_for_status()
         pending_resp = gh.get(
             f"{GITHUB_API}/repos/{repo}/pulls/{number}/requested_reviewers",
+            params={"per_page": 100},
             timeout=HTTP_TIMEOUT,
         )
         pending_resp.raise_for_status()
