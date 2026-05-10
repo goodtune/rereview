@@ -131,10 +131,7 @@ def main(args: dict) -> dict:
         debug["http_keys"] = sorted(http.keys())
         debug["isBase64Encoded"] = http.get("isBase64Encoded")
         print(f"rerequest: signature failure: {debug}", file=sys.stderr)
-        body = {"error": "invalid signature"}
-        if os.environ.get("DEBUG") == "1":
-            body["debug"] = debug
-        return _response(401, body)
+        return _response(401, {"error": "invalid signature"})
 
     if headers.get("x-github-event") != "pull_request":
         return _response(200, {"ignored": "event"})
