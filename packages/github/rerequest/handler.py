@@ -80,14 +80,16 @@ def _select_reviewers(reviews: list[dict], author_login: str, pending: set[str])
     # Sort by submitted_at so the last-write per login is the actual latest
     # review, regardless of the order GitHub returned them in. Reviews with no
     # submitted_at sort to the front (treated as oldest).
+    #
+    # Bots are kept: copilot-pull-request-reviewer[bot] is the canonical
+    # example of a reviewer-bot worth re-notifying. The author check below
+    # still excludes whoever opened the PR (e.g. renovate[bot]).
     ordered = sorted(reviews, key=lambda r: r.get("submitted_at") or "")
     latest: dict[str, str] = {}
     for review in ordered:
         user = (review.get("user") or {})
         login = user.get("login")
         if not login:
-            continue
-        if user.get("type") == "Bot" or login.endswith("[bot]"):
             continue
         if login == author_login:
             continue

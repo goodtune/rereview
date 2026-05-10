@@ -151,12 +151,25 @@ def test_select_reviewers_dedupes_and_filters():
         {"user": {"login": "bob", "type": "User"}, "state": "CHANGES_REQUESTED"},
         {"user": {"login": "bob", "type": "User"}, "state": "APPROVED"},
         {"user": {"login": "carol", "type": "User"}, "state": "DISMISSED"},
-        {"user": {"login": "dependabot[bot]", "type": "Bot"}, "state": "COMMENTED"},
+        # Reviewer bots (copilot-pull-request-reviewer[bot] in particular)
+        # are legitimate reviewers and must be re-requested.
+        {"user": {"login": "copilot-pull-request-reviewer[bot]", "type": "Bot"}, "state": "COMMENTED"},
         {"user": {"login": "dave", "type": "User"}, "state": "APPROVED"},
         {"user": {"login": "eve", "type": "User"}, "state": "COMMENTED"},
     ]
     result = rerequest._select_reviewers(reviews, author_login="alice", pending={"eve"})
-    assert result == ["bob", "dave"]
+    assert result == ["bob", "copilot-pull-request-reviewer[bot]", "dave"]
+
+
+def test_select_reviewers_excludes_bot_pr_author():
+    # PR opened by renovate[bot]; copilot reviewed. Author exclusion
+    # still applies regardless of bot-ness.
+    reviews = [
+        {"user": {"login": "renovate[bot]", "type": "Bot"}, "state": "APPROVED"},
+        {"user": {"login": "copilot-pull-request-reviewer[bot]", "type": "Bot"}, "state": "CHANGES_REQUESTED"},
+    ]
+    result = rerequest._select_reviewers(reviews, author_login="renovate[bot]", pending=set())
+    assert result == ["copilot-pull-request-reviewer[bot]"]
 
 
 def test_select_reviewers_uses_latest_state_for_dismissed():
