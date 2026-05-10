@@ -51,7 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.FUNCTION_GITHUB_TOKEN }}
           GITHUB_WEBHOOK_SECRET: ${{ secrets.FUNCTION_WEBHOOK_SECRET }}
           # Sourced from a repo variable (not a secret) so it can be toggled
-          # by `gh variable set DEBUG --body 1` / `gh variable delete DEBUG`.
-          # Empty when unset → debug branch off.
-          DEBUG: ${{ vars.DEBUG }}
+          # by `gh variable set DEBUG --body 1`. Defaults to "0" because
+          # doctl errors out on empty ${DEBUG} substitution in project.yml.
+          DEBUG: ${{ vars.DEBUG || '0' }}
         run: doctl serverless deploy .
