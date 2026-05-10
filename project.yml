@@ -10,7 +10,12 @@ packages:
         binary: false
         main: ""
         runtime: "python:3.11"
-        web: true
+        # `raw` (not `true`) is mandatory for HMAC webhook handlers: with
+        # `web: true` DO sets the `raw-http: false` annotation and the
+        # runtime parses JSON bodies into args, so the bytes GitHub signed
+        # don't survive to verification. `raw` keeps the body intact (base64
+        # in args.http.body, isBase64Encoded=true).
+        web: raw
         webSecure: false
         parameters: {}
         environment:
